@@ -1,0 +1,20 @@
+# Apps Script project — nothing is built locally, but keep local tooling out of git.
+# clasp (if anyone uses it locally)
+.clasp.json
+.clasprc.json
+
+# Environment & secrets (keep .env.example)
+.env
+.env.*
+!.env.example
+
+# Editors / AI tools
+.vscode/settings.json
+.idea/
+.claude/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+*.log

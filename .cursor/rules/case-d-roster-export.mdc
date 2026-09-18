@@ -1,0 +1,29 @@
+---
+description: Project context for Case D Roster Export — client, architecture, Apps Script constraints, status, and next steps
+alwaysApply: true
+---
+
+# Case D — Roster Export Automation
+
+## Client and problem
+- **Client:** Mr. Ring (teacher, Pomfret School); eventually all ~90 teachers.
+- **Problem:** Canvas has no clean one-click roster export. Every midterm and finals, teachers copy rosters out of Canvas, paste-special into Sheets to strip links, move names into a Google Doc to write comments, then copy comments into Sundial (Blackbaud MySchoolApp), export a PDF, and email it.
+- **Goal:** (1) pull the roster from Canvas automatically, (2) generate a clean Google Doc per class for writing comments, (3) Phase 2: push finished comments back into Sundial via the Blackbaud SKY API.
+
+## Team
+- Developers: James Lake, Magnus Songhurst, Jay Youm. Club lead: Cayden Auyang.
+
+## Stack and architecture (decided — do not reopen)
+- **Google Apps Script bound to a Google Sheet.** No server, no Python, no Chrome extension. Files are copied into the Apps Script editor; this repo is the source of truth.
+- `Code.gs` menu ("Canvas Tools") and orchestration · `CanvasAPI.gs` Canvas REST wrapper (courses + rosters, paginated, personal bearer token per teacher) · `DocBuilder.gs` creates a Drive folder, one Doc per class, one tab per student (falls back to page breaks if Docs tabs fail) · `DocReader.gs` reads completed Docs back · `SundialAPI.gs` Blackbaud SKY API placeholder (Phase 2, stubbed with TODOs) · dialogs: `TokenDialog.html`, `CourseSelector.html`, `SundialSetup.html`, `ExportDialog.html` · `appsscript.json` manifest and OAuth scopes.
+- Secrets live in `PropertiesService.getUserProperties()` (`SUNDIAL_SUBSCRIPTION_KEY`, `SUNDIAL_CLIENT_ID`, Canvas token) and are set through the dialogs. Never hardcode them.
+
+## Constraints and gotchas
+- Docs "tabs" API support is new; keep the page-break fallback in `DocBuilder.gs` working.
+- Canvas uses `sortable_name` ("Last, First"); Sundial's format is TBD. Use `normalizeName_()` for matching.
+- Phase 2 is **blocked** until school IT registers the app and grants SKY API OAuth access; no public docs confirm a write endpoint for progress-report comments. Keep `SundialAPI.gs` stubs clearly marked `TODO` rather than inventing endpoints.
+- `appsscript.json` must stay valid JSON; add OAuth scopes there when new Google services are used.
+
+## Status and next steps
+- 🟢 Phase 1 built: Canvas → Google Docs generation. 🟡 Phase 2 blocked on SKY API access.
+- Next: test Phase 1 with Mr. Ring's real Canvas account; follow up with IT on SKY API; confirm a comments write endpoint exists; survey other departments' comment formats; package as a shared template for all teachers.

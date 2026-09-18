@@ -1,7 +1,7 @@
 # Case D: Roster Export Automation
 
 ## Client
-Mr. Ring
+Mr. Ring (teacher, Pomfret School)
 
 ## Problem
 Canvas lacks a clean, one-click export for class rosters. Every midterm and finals, teachers manually copy rosters out of Canvas, paste-special them into Google Sheets to strip hyperlinks, move names into a Google Doc to write comments, then copy those comments into Sundial (Blackbaud MySchoolApp), export a PDF, and email it to their department head.
@@ -74,3 +74,19 @@ Drive Folder: "Comments — Fall Midterm"
 |------|------|
 | Developer | James Lake |
 | Developer | Magnus Songhurst |
+| Developer | Jay Youm |
+| Club lead | Cayden Auyang |
+
+## Working on this repo
+
+There is nothing to install: this project is pure Google Apps Script. Edit the `.gs` and `.html` files here, then copy them into the Apps Script editor (see Setup above) to test. Keep the repo as the source of truth and paste changes back here.
+
+- Branch from `main` as `feature/<short-description>`, `fix/<short-description>`, or `chore/<short-description>` (lowercase, hyphens).
+- Every change goes through a pull request with at least one approval. `main` cannot be pushed to directly.
+- Never commit secrets. Canvas tokens and Sundial keys live in Apps Script **User Properties** at runtime (set through the dialogs), never in code.
+- Cursor rules for this project are committed in `.cursor/rules/`. You do not need to paste anything into your IDE settings.
+- The full Git walkthrough for beginners is the club's **[Developer Onboarding Guide](https://github.com/CivicAIClub/docs/blob/main/developer-onboarding.md)**.
+
+## History
+
+This repository was split out of the club monorepo (`CivicAIClub/Civic-AI-Github-Repository`, `projects/case-d-roster-export/`) on 2026-09-18 with full history preserved.
