@@ -11,7 +11,7 @@ alwaysApply: true
 - **Goal:** (1) pull the roster from Canvas automatically, (2) generate a clean Google Doc per class for writing comments, (3) Phase 2: push finished comments back into Sundial via the Blackbaud SKY API.
 
 ## Team
-- Developers: James Lake, Magnus Songhurst. Club lead: Cayden Auyang. Former developer: Jay Youm (Graduated); do not list him as an active team member.
+- Developers: James Lake, Magnus Songhurst. Club lead: Cayden Auyang. Alumni advisor: Jay Youm (alumni advisor) — advises the team; not an active developer and not in CODEOWNERS.
 
 ## Stack and architecture (decided — do not reopen)
 - **Google Apps Script bound to a Google Sheet.** No server, no Python, no Chrome extension. Files are copied into the Apps Script editor; this repo is the source of truth.
