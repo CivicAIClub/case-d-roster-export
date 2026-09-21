@@ -74,8 +74,8 @@ Drive Folder: "Comments — Fall Midterm"
 |------|------|
 | Developer | James Lake |
 | Developer | Magnus Songhurst |
-| Developer | Jay Youm |
 | Club lead | Cayden Auyang |
+| Former developer | Jay Youm (Graduated) |
 
 ## Working on this repo
 
