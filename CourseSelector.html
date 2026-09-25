@@ -238,7 +238,13 @@
       // and off if none are.
       function checkSelection() {
         var checked = document.querySelectorAll('#courseList input[type="checkbox"]:checked');
-        document.getElementById("generateBtn").disabled = checked.length === 0;
+        var btn = document.getElementById("generateBtn");
+        btn.disabled = checked.length === 0;
+        // After a finished run the button says "Done!". Once the teacher ticks a class again,
+        // put the normal label back so it's clear that clicking will make another set of docs.
+        if (!btn.disabled && btn.textContent === "Done!") {
+          btn.textContent = "Generate Templates";
+        }
       }
 
       // Runs when the teacher clicks "Generate Templates". It sends the ticked classes and the
@@ -266,11 +272,17 @@
 
         // Ask Code.gs to make the docs. This can take a while when there are many students.
         google.script.run
-          // If it worked: clear the progress message, label the button "Done!", and show the links.
+          // If it worked: label the button "Done!" and show the links. Untick every class, so that
+          // if the teacher makes more docs from this same window, the classes just finished aren't
+          // made a second time by accident. Then explain how to make docs for more classes.
           .withSuccessHandler(function (result) {
-            statusEl.textContent = "";
             btn.textContent = "Done!";
             showResults(result);
+            document.querySelectorAll('#courseList input[type="checkbox"]').forEach(function (cb) {
+              cb.checked = false;
+            });
+            statusEl.textContent =
+              "To make docs for more classes, tick them and click Generate Templates again.";
           })
           // If it failed: show the error and turn the button back on so the teacher can try again.
           .withFailureHandler(function (err) {
