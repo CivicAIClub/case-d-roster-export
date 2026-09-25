@@ -234,11 +234,25 @@
         checkSelection();
       }
 
+      // True while docs are being made. Used to keep the button off until that run finishes.
+      var isGenerating = false;
+
       // Turn the "Generate Templates" button on if at least one class is ticked,
-      // and off if none are.
+      // and off if none are. While a run is still going, keep it off no matter what is ticked,
+      // so a second click can't start a second run at the same time.
       function checkSelection() {
         var checked = document.querySelectorAll('#courseList input[type="checkbox"]:checked');
-        document.getElementById("generateBtn").disabled = checked.length === 0;
+        var btn = document.getElementById("generateBtn");
+        if (isGenerating) {
+          btn.disabled = true;
+          return;
+        }
+        btn.disabled = checked.length === 0;
+        // After a finished run the button says "Done!". Once the teacher ticks a class again,
+        // put the normal label back so it's clear that clicking will make another set of docs.
+        if (!btn.disabled && btn.textContent === "Done!") {
+          btn.textContent = "Generate Templates";
+        }
       }
 
       // Runs when the teacher clicks "Generate Templates". It sends the ticked classes and the
@@ -250,6 +264,10 @@
         var errorEl = document.getElementById("error");
         var statusEl = document.getElementById("status");
         var resultsEl = document.getElementById("results");
+
+        // If a run is already going, ignore this click.
+        if (isGenerating) return;
+        isGenerating = true;
 
         // Grey out the button so it can't be clicked twice, hide old messages, and show that work
         // has started.
@@ -266,19 +284,28 @@
 
         // Ask Code.gs to make the docs. This can take a while when there are many students.
         google.script.run
-          // If it worked: clear the progress message, label the button "Done!", and show the links.
+          // If it worked: label the button "Done!" and show the links. Untick every class, so that
+          // if the teacher makes more docs from this same window, the classes just finished aren't
+          // made a second time by accident. Then explain how to make docs for more classes.
           .withSuccessHandler(function (result) {
-            statusEl.textContent = "";
+            isGenerating = false;
             btn.textContent = "Done!";
             showResults(result);
+            document.querySelectorAll('#courseList input[type="checkbox"]').forEach(function (cb) {
+              cb.checked = false;
+            });
+            statusEl.textContent =
+              "To make docs for more classes, tick them and click Generate Templates again.";
           })
-          // If it failed: show the error and turn the button back on so the teacher can try again.
+          // If it failed: show the error and turn the button back on (if a class is still ticked)
+          // so the teacher can try again.
           .withFailureHandler(function (err) {
+            isGenerating = false;
             errorEl.style.display = "block";
             errorEl.textContent = "Error: " + err.message;
-            btn.disabled = false;
             btn.textContent = "Generate Templates";
             statusEl.textContent = "";
+            checkSelection();
           })
           .generateTemplate(courseIds, gradingPeriod);
       }

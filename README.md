@@ -53,7 +53,7 @@ Drive Folder: "Comments — Fall Midterm"
 6. **Canvas Tools → Generate Comments Template** — pick grading period + classes → get a Drive folder with one doc per class
 
 ## Technical Challenges
-- **Google Docs tabs via API**: tab support is new (2024) and the REST API's `createTab` request isn't fully documented. Built a fallback to page breaks per student if tabs fail.
+- **Google Docs tabs via API**: tab support is new (2024). The code uses the documented `batchUpdate` requests `addDocumentTab` and `updateDocumentTabProperties`, and reads tabs with `documents.get` plus `includeTabsContent: true` (without it, `document.tabs` comes back empty). Built a fallback to page breaks per student if tabs fail; the fallback starts over in a fresh doc and trashes the half-built one.
 - **Sundial API access is blocked**: Blackbaud SKY API requires school admin to register the app + grant OAuth permissions. Phase 2 is stubbed with clear TODOs until IT enables access.
 - **Comment write endpoint unconfirmed**: read endpoints exist (`Get-SchoolRoster`, `Get-SchoolSectionByTeacher`), but no public docs confirm a POST endpoint for student progress-report comments.
 - **Name matching for Sundial export**: Canvas uses `sortable_name` ("Last, First"), Sundial format TBD. Built a `normalizeName_()` helper for fuzzy matching.
