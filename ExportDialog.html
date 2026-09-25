@@ -1,5 +1,16 @@
 <!DOCTYPE html>
 <html>
+  <!-- ExportDialog.html: the pop-up window for sending finished comments to Sundial (Phase 2). -->
+  <!-- Sundial is the school's report system. Code.gs opens this window from the menu -->
+  <!-- "Sundial Export", item "Export Comments to Sundial", but only when connected to Sundial. -->
+  <!-- Step 1: the teacher pastes the link to their comments folder in Google Drive. -->
+  <!-- Step 2: the window shows how many students in each class have comments so far -->
+  <!-- (counted by DocReader.gs). -->
+  <!-- Step 3: the teacher clicks "Export All to Sundial", which asks Code.gs to send them. -->
+  <!-- Phase 2 is blocked until school IT allows access to Sundial. For now this window never -->
+  <!-- opens (the connection check always says "not connected"), and the export itself would -->
+  <!-- stop with a "not yet implemented" message. -->
+  <!-- The "head" part below only sets colors, sizes, and spacing. The window starts at "body". -->
   <head>
     <style>
       body {
@@ -154,6 +165,7 @@
 
     <!-- Step 1: Enter folder URL -->
     <div id="step1">
+      <!-- A box to paste the folder link into, plus a hint about which folder to use. -->
       <div class="step-label">Step 1: Select Comments Folder</div>
       <label>Google Drive Folder URL</label>
       <input
@@ -164,23 +176,32 @@
       <div class="help">
         The Drive folder created when you generated comment templates
       </div>
+      <!-- A shortcut that fills in the most recent folder this tool made. -->
+      <!-- Hidden unless there is one. -->
       <span class="prefill-link" id="prefillLink" onclick="prefillLastFolder()" style="display:none">
         Use last generated folder
       </span>
+      <!-- Reads the docs in the folder and shows the preview in Step 2. -->
       <button class="btn" onclick="loadPreview()">Load Preview</button>
     </div>
 
     <!-- Step 2: Preview -->
     <div id="step2" style="display: none">
+      <!-- Hidden until the teacher clicks "Load Preview". -->
       <div class="step-label">Step 2: Review All Classes</div>
 
+      <!-- One row per class showing how many students have comments. -->
+      <!-- Filled in by the code below. -->
       <div class="section-summary" id="sectionSummary">
         <div class="loading">Reading documents...</div>
       </div>
 
+      <!-- Totals across all classes, hidden until the preview is ready. -->
       <div class="totals" id="totals" style="display: none"></div>
 
       <div class="step">
+        <!-- Step 3: the export button (greyed out until at least one comment exists) -->
+        <!-- and a status line. -->
         <div class="step-label">Step 3: Export to Sundial</div>
         <button
           class="btn btn-export"
@@ -194,11 +215,17 @@
       </div>
     </div>
 
+    <!-- The code below makes the window work. It runs inside the teacher's web browser. -->
     <script>
+      // Remember the folder link the teacher entered, and the most recent folder the tool made.
       var folderUrl = "";
       var lastFolder = "";
 
       // Check if there's a previously generated folder
+      // "google.script.run" is how this window asks the Apps Script code to do something.
+      // The answer comes back a moment later. Here it asks Code.gs (getLastCommentsFolder)
+      // for the last folder link. If there is one, the "Use last generated folder" shortcut
+      // is shown.
       google.script.run
         .withSuccessHandler(function (url) {
           if (url) {
@@ -208,18 +235,26 @@
         })
         .getLastCommentsFolder();
 
+      // Runs when the teacher clicks "Use last generated folder": put that link into the box.
       function prefillLastFolder() {
         document.getElementById("folderUrl").value = lastFolder;
       }
 
+      // Runs when the teacher clicks "Load Preview". It sends the folder link to DocReader.gs
+      // (getCommentsSummaryFromFolder), which reads every doc and counts the comments, then shows
+      // the counts. It gives nothing back; it changes what's shown in the window.
       function loadPreview() {
+        // Read the link from the box, without extra spaces. If the box is empty, do nothing.
         folderUrl = document.getElementById("folderUrl").value.trim();
         if (!folderUrl) return;
 
+        // Show Step 2 with a "Reading..." message while the docs are being read.
         document.getElementById("step2").style.display = "block";
         document.getElementById("sectionSummary").innerHTML =
           '<div class="loading">Reading comments from all documents...</div>';
 
+        // Ask for the counts. If it works, show them. If it fails, show the error in the
+        // preview area.
         google.script.run
           .withSuccessHandler(function (summary) {
             renderSummary(summary);
@@ -233,12 +268,17 @@
           .getCommentsSummaryFromFolder(folderUrl);
       }
 
+      // Show the comment counts. It is given, for each class, how many students have comments out
+      // of the total, plus the totals across all classes. It gives nothing back.
       function renderSummary(summary) {
+        // Start with a header row: "Class" and "Comments".
         var html =
           '<div class="section-row header">' +
           "<span>Class</span><span>Comments</span>" +
           "</div>";
 
+        // Add a row for each class with a colored label: green if every student has a comment,
+        // yellow if some do, and red if none do.
         for (var i = 0; i < summary.sections.length; i++) {
           var s = summary.sections[i];
           var badgeClass =
@@ -250,6 +290,7 @@
           var badgeText =
             s.withComments + " / " + s.totalStudents + " students";
 
+          // The row shows the class name and its label, which reads like "5 / 12 students".
           html +=
             '<div class="section-row">' +
             "<span>" + escapeHtml(s.courseName) + "</span>" +
@@ -257,8 +298,10 @@
             "</div>";
         }
 
+        // Put all the rows into the preview area.
         document.getElementById("sectionSummary").innerHTML = html;
 
+        // Show the totals line underneath.
         var totalsEl = document.getElementById("totals");
         totalsEl.style.display = "block";
         totalsEl.innerHTML =
@@ -270,21 +313,29 @@
           summary.sections.length +
           " classes";
 
+        // Turn on the export button only if at least one student has a comment.
         document.getElementById("exportBtn").disabled =
           summary.totalWithComments === 0;
       }
 
+      // Runs when the teacher clicks "Export All to Sundial". It asks Code.gs
+      // (exportCommentsToSundial) to read all the docs again and send the comments to Sundial.
+      // For now Code.gs always stops with a "not yet implemented" message, which shows as an error.
       function exportToSundial() {
+        // Find the button and the status line.
         var btn = document.getElementById("exportBtn");
         var statusEl = document.getElementById("status");
 
+        // Grey out the button so it can't be clicked twice, and show that work has started.
         btn.disabled = true;
         btn.textContent = "Exporting...";
         statusEl.className = "status";
         statusEl.textContent =
           "Reading all documents and pushing comments to Sundial...";
 
+        // Send the request to Code.gs.
         google.script.run
+          // If it worked: show how many comments were sent and how many failed.
           .withSuccessHandler(function (result) {
             statusEl.className = "status success";
             statusEl.textContent =
@@ -296,6 +347,7 @@
                 : "All successful!");
             btn.textContent = "Done!";
           })
+          // If it failed: show the error and turn the button back on, relabeled "Retry Export".
           .withFailureHandler(function (err) {
             statusEl.className = "status error";
             statusEl.textContent = "Error: " + err.message;
@@ -305,6 +357,9 @@
           .exportCommentsToSundial(folderUrl);
       }
 
+      // Make text safe to show on the page. A class name containing characters like "<" or "&"
+      // could otherwise be mistaken for page code. It is given text and gives back the safe
+      // version. It works by letting the browser itself convert the text.
       function escapeHtml(text) {
         var div = document.createElement("div");
         div.textContent = text;

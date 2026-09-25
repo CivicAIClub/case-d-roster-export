@@ -7,7 +7,21 @@
  *
  * For the export flow, multiple doc URLs are read from a Drive folder.
  */
+// DocReader.gs: reads the teacher's finished comments back out of the Google Docs that
+// DocBuilder.gs made. This is the first half of Phase 2 (sending comments into Sundial, the
+// school's report system).
+// It is given the link to a comments folder in Google Drive. It opens every Google Doc in that
+// folder and, for each class, collects every student's name and the comment written for them.
+// It hands that to Code.gs, which will send it to Sundial (see SundialAPI.gs) once school IT
+// allows it, and to the export pop-up (ExportDialog.html), which shows a preview of how many
+// students in each class have comments. It also has a helper that pairs students in the docs
+// with students in Sundial's records by name.
 
+// Read every student's comment from one comment doc.
+// It is given the doc's link. It gives back the class name, the grading period, and a list of
+// students, each with their name and comment.
+// Docs made with tabs and docs made with pages are laid out differently, so it tries the tab
+// way first and switches to the page way if that fails.
 /**
  * Reads all comments from a single Google Doc.
  * Auto-detects whether the doc uses tabs or pages.
@@ -16,9 +30,12 @@
  * @returns {Object} {courseName, gradingPeriod, students: [{name, comment}]}
  */
 function readCommentsFromDoc(docUrl) {
+  // Pull the doc's ID (the unique code in the middle of its link) out of the link.
   var docId = extractDocId_(docUrl);
 
   // Try tab-based reading first
+  // If reading by tabs fails for any reason, note it in the log (a behind-the-scenes record only
+  // developers look at) and read the doc page by page instead.
   try {
     return readFromTabs_(docId);
   } catch (e) {
@@ -27,6 +44,11 @@ function readCommentsFromDoc(docUrl) {
   }
 }
 
+// Read the comments from every Google Doc inside one Drive folder.
+// It is given the folder's link and gives back one entry per doc (one per class), each with
+// the class name, grading period, and its students' names and comments.
+// Note: every Google Doc in the folder is read, so any other doc the teacher puts in this
+// folder will be read as if it were a comment doc too.
 /**
  * Reads comments from all docs in a Drive folder.
  *
@@ -34,10 +56,12 @@ function readCommentsFromDoc(docUrl) {
  * @returns {Array} [{courseName, gradingPeriod, students: [{name, comment}]}]
  */
 function readCommentsFromFolder(folderUrl) {
+  // Pull the folder's ID out of its link, open the folder, and list only the Google Docs in it.
   var folderId = extractFolderId_(folderUrl);
   var folder = DriveApp.getFolderById(folderId);
   var files = folder.getFilesByType(MimeType.GOOGLE_DOCS);
 
+  // Go through the docs one at a time, read each one's comments, and add them to the collection.
   var allSections = [];
   while (files.hasNext()) {
     var file = files.next();
@@ -46,6 +70,7 @@ function readCommentsFromFolder(folderUrl) {
     allSections.push(section);
   }
 
+  // Hand back the comments for every class.
   return allSections;
 }
 
@@ -53,15 +78,22 @@ function readCommentsFromFolder(folderUrl) {
 // Tab-based reading (Advanced Docs API)
 // ─────────────────────────────────────────────
 
+// Read the comments from a doc that has one tab per student.
+// It is given the doc's ID. It gives back the class name and grading period (taken from the
+// doc's title) and each student's name (the tab's title) and comment (the tab's text).
 /**
  * Reads student comments from a doc that uses tabs (one tab per student).
  * The tab title is the student name, tab content is the comment.
  */
 function readFromTabs_(docId) {
+  // Get the whole doc from Google. Its title, like "Hum 2 — Fall Midterm", is split into the
+  // class name and grading period (see parseSectionHeading_ below).
   var doc = Docs.Documents.get(docId);
   var docTitle = doc.title;
   var parsed = parseSectionHeading_(docTitle);
 
+  // Start an empty list, then go through each tab one at a time. The tab's title is the
+  // student's name.
   var students = [];
 
   for (var i = 0; i < doc.tabs.length; i++) {
@@ -69,6 +101,7 @@ function readFromTabs_(docId) {
     var studentName = tab.tabProperties.title;
 
     // Extract text content from the tab body
+    // Gather all the text in this tab. A tab might have no content, so check for that first.
     var tabContent = '';
     if (tab.documentTab && tab.documentTab.body) {
       tabContent = extractTextFromBody_(tab.documentTab.body);
@@ -77,12 +110,14 @@ function readFromTabs_(docId) {
     // Remove the student name and "Comment:" label, keep only the actual comment
     var comment = cleanCommentText_(tabContent, studentName);
 
+    // Add this student and their comment to the list.
     students.push({
       name: studentName,
       comment: comment
     });
   }
 
+  // Hand back the class details and the list of students with their comments.
   return {
     courseName: parsed.courseName,
     gradingPeriod: parsed.gradingPeriod,
@@ -90,13 +125,21 @@ function readFromTabs_(docId) {
   };
 }
 
+// Google describes a doc's contents as nested pieces: paragraphs, and inside each paragraph,
+// "runs" of text that share the same style (for example, a bold run and then a plain run).
+// This helper walks through all of them and joins the text into one plain piece of text.
+// It is given a tab's body and gives back its text.
+// Note: only regular paragraphs are read, so any text inside a table would be skipped.
 /**
  * Extracts plain text from a Docs API body object.
  */
 function extractTextFromBody_(body) {
+  // Start with no text. If the tab has no content at all, hand back the empty text.
   var text = '';
   if (!body.content) return text;
 
+  // Go through each paragraph, and within it each run of text, adding its words to the end of
+  // the text gathered so far.
   for (var i = 0; i < body.content.length; i++) {
     var element = body.content[i];
     if (element.paragraph && element.paragraph.elements) {
@@ -109,24 +152,33 @@ function extractTextFromBody_(body) {
     }
   }
 
+  // Hand back all the text.
   return text;
 }
 
+// Cut the tool's own words out of a tab's text so only the teacher's comment is left.
+// It is given the tab's full text and the student's name, and gives back just the comment.
+// If the teacher didn't write anything, this gives back empty text.
 /**
  * Strips the student name heading and "Comment:" label from the raw tab text,
  * leaving only the teacher's written comment.
  */
 function cleanCommentText_(rawText, studentName) {
+  // Remove extra spaces and blank lines from the start and end.
   var text = rawText.trim();
 
   // Remove student name from the start
+  // If the text starts with the student's name, cut the name off (and the spaces after it).
   if (text.indexOf(studentName) === 0) {
     text = text.substring(studentName.length).trim();
   }
 
   // Remove "Comment:" label
+  // If what's left starts with "Comment:" (with any mix of capital and small letters), cut that
+  // off too, along with the spaces after it.
   text = text.replace(/^Comment:\s*/i, '').trim();
 
+  // Hand back the comment.
   return text;
 }
 
@@ -134,39 +186,56 @@ function cleanCommentText_(rawText, studentName) {
 // Page-based reading (DocumentApp fallback)
 // ─────────────────────────────────────────────
 
+// Read the comments from a doc that puts each student on their own page (the backup layout).
+// It is given the doc's ID. It gives back the class name and grading period (from the doc's
+// title) and each student's name and comment.
+// It reads the doc from top to bottom, one paragraph at a time. A "Heading 2" paragraph means
+// a new student starts, and the lines after the "Comment:" label are that student's comment.
+// Note: only plain paragraphs are read, so bulleted or numbered lists and tables are skipped.
 /**
  * Reads student comments from a doc that uses page breaks (one page per student).
  * Each page has: Heading2 (student name) → "Comment:" label → comment text.
  */
 function readFromPages_(docId) {
+  // Open the doc and get its body. Split its title into the class name and grading period.
   var doc = DocumentApp.openById(docId);
   var body = doc.getBody();
   var docTitle = doc.getName();
   var parsed = parseSectionHeading_(docTitle);
 
+  // Set up an empty list of students. "currentStudent" holds the student we are in the middle
+  // of reading, and "collectingComment" remembers whether we have passed their "Comment:" label.
   var students = [];
   var currentStudent = null;
   var collectingComment = false;
 
+  // Go through every item in the doc, top to bottom, looking only at ordinary paragraphs.
   for (var i = 0; i < body.getNumChildren(); i++) {
     var child = body.getChild(i);
     var type = child.getType();
 
     if (type === DocumentApp.ElementType.PARAGRAPH) {
+      // Get the paragraph's words, with spaces trimmed off both ends.
       var para = child.asParagraph();
       var text = para.getText().trim();
 
       // Student name heading
+      // A non-empty "Heading 2" line is a student's name. Save the student we were reading (if
+      // any) and start a new one with an empty comment. The doc's title uses "Heading 1", so it's
+      // skipped.
       if (para.getHeading() === DocumentApp.ParagraphHeading.HEADING2 && text) {
         if (currentStudent) students.push(currentStudent);
         currentStudent = { name: text, comment: '' };
         collectingComment = false;
       }
       // "Comment:" label — start collecting after this
+      // A line that says exactly "Comment:" means the teacher's writing starts on the next line.
       else if (text.match(/^Comment:$/i) && currentStudent) {
         collectingComment = true;
       }
       // Actual comment text
+      // Any non-empty line after the label is part of the comment. Lines are joined together with a
+      // line break between them. Blank lines are skipped.
       else if (collectingComment && currentStudent && text) {
         currentStudent.comment += (currentStudent.comment ? '\n' : '') + text;
       }
@@ -174,8 +243,10 @@ function readFromPages_(docId) {
   }
 
   // Don't forget the last student
+  // A student is only saved when the next name appears, so the last student still needs saving.
   if (currentStudent) students.push(currentStudent);
 
+  // Hand back the class details and the students with their comments.
   return {
     courseName: parsed.courseName,
     gradingPeriod: parsed.gradingPeriod,
@@ -187,6 +258,11 @@ function readFromPages_(docId) {
 // Summary for export dialog
 // ─────────────────────────────────────────────
 
+// Count how many students in each class have a comment written, for the preview in the
+// export pop-up (ExportDialog.html).
+// It is given the comments folder's link. For each class it gives back the class name, grading
+// period, number of students, and how many do and don't have comments, plus totals across
+// all classes.
 /**
  * Returns a summary of all comments across all docs in a folder.
  * Used by ExportDialog.html to show a preview before exporting.
@@ -195,16 +271,20 @@ function readFromPages_(docId) {
  * @returns {Object} {sections: [{courseName, totalStudents, withComments, withoutComments}], totalStudents, totalWithComments}
  */
 function getCommentsSummaryFromFolder(folderUrl) {
+  // Read every doc in the folder, and start both running totals at zero.
   var sections = readCommentsFromFolder(folderUrl);
   var totalStudents = 0;
   var totalWithComments = 0;
 
+  // For each class: count the students whose comment isn't empty, work out how many are still
+  // missing one, and add both numbers to the running totals.
   var sectionSummaries = sections.map(function (section) {
     var withComments = section.students.filter(function (s) { return s.comment !== ''; }).length;
     var withoutComments = section.students.length - withComments;
     totalStudents += section.students.length;
     totalWithComments += withComments;
 
+    // Keep this class's name, grading period, and counts.
     return {
       courseName: section.courseName,
       gradingPeriod: section.gradingPeriod,
@@ -214,6 +294,7 @@ function getCommentsSummaryFromFolder(folderUrl) {
     };
   });
 
+  // Hand back each class's counts plus the overall totals.
   return {
     sections: sectionSummaries,
     totalStudents: totalStudents,
@@ -225,17 +306,27 @@ function getCommentsSummaryFromFolder(folderUrl) {
 // Matching & Helpers
 // ─────────────────────────────────────────────
 
+// Pair each student in a comment doc with the same student in Sundial's records, by name, so
+// each comment can go to the right student. (Phase 2: nothing calls this yet.)
+// It is given the students from the doc (names and comments) and Sundial's student list (names
+// and Sundial ID numbers). It gives back every doc student with their comment, their Sundial ID
+// if a match was found, and whether they were matched.
+// Names must match exactly, apart from capital letters and extra spaces.
 /**
  * Matches students from the Google Doc to Sundial student records.
  */
 function matchStudentsToSundial(docStudents, sundialStudents) {
+  // Start an empty list of results.
   var results = [];
 
+  // Go through the students from the doc one at a time, tidying each name for comparing.
   for (var i = 0; i < docStudents.length; i++) {
     var docStudent = docStudents[i];
     var docName = normalizeName_(docStudent.name);
     var matched = false;
 
+    // Look through Sundial's students for the same tidied name. At the first match, save that
+    // student's Sundial ID with their comment and stop looking.
     for (var j = 0; j < sundialStudents.length; j++) {
       var sundialStudent = sundialStudents[j];
       if (docName === normalizeName_(sundialStudent.name)) {
@@ -250,6 +341,8 @@ function matchStudentsToSundial(docStudents, sundialStudents) {
       }
     }
 
+    // If nobody in Sundial matched, still keep the student in the results, but with no Sundial ID
+    // and marked as unmatched, so the problem can be reported.
     if (!matched) {
       results.push({
         student_id: null,
@@ -260,32 +353,50 @@ function matchStudentsToSundial(docStudents, sundialStudents) {
     }
   }
 
+  // Hand back the results.
   return results;
 }
 
+// Pull a doc's ID out of its web link. Google Doc links look like
+// https://docs.google.com/document/d/<ID>/edit, so this finds the part right after "/d/".
+// It is given the link and gives back the ID. If the link isn't a Google Doc link, it stops
+// with an error message.
 function extractDocId_(url) {
   var match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
   if (!match) throw new Error('Invalid Google Doc URL.');
   return match[1];
 }
 
+// Pull a folder's ID out of its Google Drive link, which looks like
+// https://drive.google.com/drive/folders/<ID>, by finding the part right after "/folders/".
+// It is given the link and gives back the ID, or stops with an error if the link is wrong.
 function extractFolderId_(url) {
   var match = url.match(/\/folders\/([a-zA-Z0-9_-]+)/);
   if (!match) throw new Error('Invalid Google Drive folder URL.');
   return match[1];
 }
 
+// Split a doc's title like "Hum 2 — Fall Midterm" into the class name ("Hum 2") and the
+// grading period ("Fall Midterm"), using the long dash "—" between them.
+// It is given the title and gives back both parts.
 function parseSectionHeading_(heading) {
   var parts = heading.split('—');
+  // If there is a long dash, everything before the first one is the class name and everything
+  // after it is the grading period.
   if (parts.length >= 2) {
     return {
       courseName: parts[0].trim(),
       gradingPeriod: parts.slice(1).join('—').trim()
     };
   }
+  // No long dash: use the whole title as the class name and leave the grading period blank.
   return { courseName: heading, gradingPeriod: '' };
 }
 
+// Tidy a name so two spellings of the same name can be compared fairly: make it all small
+// letters, turn any run of spaces into a single space, and trim spaces off the ends.
+// For example, "Last,  First " becomes "last, first". It is given a name and gives back the
+// tidied version.
 function normalizeName_(name) {
   return name.toLowerCase().replace(/\s+/g, ' ').trim();
 }
