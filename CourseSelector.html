@@ -1,5 +1,15 @@
 <!DOCTYPE html>
 <html>
+  <!-- CourseSelector.html: the pop-up window where the teacher chooses which comment docs -->
+  <!-- to make. -->
+  <!-- Code.gs opens it from the "Canvas Tools" menu, "Generate Comments Template" item. -->
+  <!-- The teacher picks a grading period (like "Fall Midterm") and ticks the classes they want. -->
+  <!-- The list of classes comes from Canvas; Code.gs fetched it just before this window opened. -->
+  <!-- Clicking "Generate Templates" asks Code.gs to get each class's students from Canvas and -->
+  <!-- build one Google Doc per class (see DocBuilder.gs). When that's done, this window shows a -->
+  <!-- link to each new doc and to the Google Drive folder that holds them. -->
+  <!-- The "head" part below only sets colors, sizes, and spacing. -->
+  <!-- The window itself starts at "body". -->
   <head>
     <style>
       body {
@@ -132,6 +142,8 @@
     </style>
   </head>
   <body>
+    <!-- A drop-down list of grading periods. -->
+    <!-- The one picked becomes part of the folder and doc names. -->
     <label class="field-label">Grading Period</label>
     <select id="gradingPeriod">
       <option value="Fall Midterm">Fall Midterm</option>
@@ -142,23 +154,34 @@
       <option value="Spring Term">Spring Term</option>
     </select>
 
+    <!-- The class list. It starts with a "Loading..." message, which the code below -->
+    <!-- replaces with a checkbox for each class. -->
+    <!-- "Select All / Deselect All" ticks or unticks every box at once. -->
     <label class="field-label">Select Courses</label>
     <span class="select-all" onclick="toggleAll()">Select All / Deselect All</span>
     <div class="course-list" id="courseList">
       <div class="loading">Loading courses from Canvas...</div>
     </div>
 
+    <!-- Empty spaces for error and progress messages, filled in by the code below when needed. -->
     <div class="error" id="error"></div>
     <div class="status" id="status"></div>
 
+    <!-- The main button. It starts greyed out and turns on once at least one class is ticked. -->
     <button class="btn" id="generateBtn" onclick="generate()" disabled>
       Generate Templates
     </button>
 
+    <!-- Hidden at first. After the docs are made, links to them appear here. -->
     <div class="results" id="results"></div>
 
+    <!-- The code below makes the window work. It runs inside the teacher's web browser. -->
     <script>
       // Load courses when dialog opens
+      // "google.script.run" is how this window asks the Apps Script code (Code.gs) to do something.
+      // The answer comes back a moment later, so we say ahead of time what to do if it works
+      // (show the classes) and if it fails (show the error where the class list would be).
+      // Here it calls getStoredCourses, which hands back the classes Code.gs saved for this window.
       google.script.run
         .withSuccessHandler(function (data) {
           renderCourses(data);
@@ -171,8 +194,12 @@
         })
         .getStoredCourses();
 
+      // Fill the class list with one checkbox per class. It is given the list of classes from
+      // Code.gs and gives nothing back; it changes what's shown in the window.
       function renderCourses(courses) {
         var html = "";
+        // For each class, build a checkbox (holding the class's ID number) with the class name
+        // as its label. Ticking or unticking a box re-checks whether the button should be on.
         for (var i = 0; i < courses.length; i++) {
           var c = courses[i];
           html +=
@@ -181,18 +208,25 @@
             '<label for="course_' + c.id + '">' + escapeHtml(c.name) + "</label>" +
             "</div>";
         }
+        // If there are no classes, show a message instead.
         if (courses.length === 0) {
           html = '<div class="loading">No courses found.</div>';
         }
+        // Put the finished list into the window, replacing the "Loading..." message.
         document.getElementById("courseList").innerHTML = html;
       }
 
+      // Make text safe to show on the page. A class name containing characters like "<" or "&"
+      // could otherwise be mistaken for page code. It is given text and gives back the safe
+      // version. It works by letting the browser itself convert the text.
       function escapeHtml(text) {
         var div = document.createElement("div");
         div.textContent = text;
         return div.innerHTML;
       }
 
+      // Runs when the teacher clicks "Select All / Deselect All". If every class is already ticked,
+      // untick them all; otherwise tick them all. Then update whether the button is turned on.
       function toggleAll() {
         var boxes = document.querySelectorAll('#courseList input[type="checkbox"]');
         var allChecked = Array.from(boxes).every(function (cb) { return cb.checked; });
@@ -200,33 +234,45 @@
         checkSelection();
       }
 
+      // Turn the "Generate Templates" button on if at least one class is ticked,
+      // and off if none are.
       function checkSelection() {
         var checked = document.querySelectorAll('#courseList input[type="checkbox"]:checked');
         document.getElementById("generateBtn").disabled = checked.length === 0;
       }
 
+      // Runs when the teacher clicks "Generate Templates". It sends the ticked classes and the
+      // grading period to Code.gs (generateTemplate), which gets the student lists from Canvas and
+      // builds the docs. While that runs, the button is greyed out and a progress message shows.
       function generate() {
+        // Find the button and the message areas on the page.
         var btn = document.getElementById("generateBtn");
         var errorEl = document.getElementById("error");
         var statusEl = document.getElementById("status");
         var resultsEl = document.getElementById("results");
 
+        // Grey out the button so it can't be clicked twice, hide old messages, and show that work
+        // has started.
         btn.disabled = true;
         btn.textContent = "Generating...";
         errorEl.style.display = "none";
         resultsEl.style.display = "none";
         statusEl.textContent = "Fetching rosters and creating documents...";
 
+        // Collect the ID numbers of the ticked classes and the chosen grading period.
         var checked = document.querySelectorAll('#courseList input[type="checkbox"]:checked');
         var courseIds = Array.from(checked).map(function (cb) { return cb.value; });
         var gradingPeriod = document.getElementById("gradingPeriod").value;
 
+        // Ask Code.gs to make the docs. This can take a while when there are many students.
         google.script.run
+          // If it worked: clear the progress message, label the button "Done!", and show the links.
           .withSuccessHandler(function (result) {
             statusEl.textContent = "";
             btn.textContent = "Done!";
             showResults(result);
           })
+          // If it failed: show the error and turn the button back on so the teacher can try again.
           .withFailureHandler(function (err) {
             errorEl.style.display = "block";
             errorEl.textContent = "Error: " + err.message;
@@ -237,9 +283,13 @@
           .generateTemplate(courseIds, gradingPeriod);
       }
 
+      // Show the teacher what was made. It is given the results from Code.gs: the folder link and,
+      // for each doc, its name, link, and number of students. Each link opens in a new browser tab.
       function showResults(result) {
+        // Start with a heading saying how many docs were made.
         var html = "<strong>Created " + result.docs.length + " document(s):</strong><br><br>";
 
+        // Add a link to each doc, with its number of students after it.
         for (var i = 0; i < result.docs.length; i++) {
           var doc = result.docs[i];
           html +=
@@ -249,11 +299,13 @@
             "</div>";
         }
 
+        // Add a link to the Drive folder that holds all the docs.
         html +=
           '<div class="folder-link">' +
           '<a href="' + result.folderUrl + '" target="_blank">Open Drive folder</a>' +
           "</div>";
 
+        // Put it all in the results box and make the box visible.
         var resultsEl = document.getElementById("results");
         resultsEl.innerHTML = html;
         resultsEl.style.display = "block";
