@@ -5,7 +5,8 @@
 // Each doc gets a separate space for every student: the student's name in bold, then a
 // "Comment:" label with blank lines under it for the teacher to write in.
 // It first tries to give each student their own tab (like tabs in a web browser, but inside
-// the doc). If that doesn't work, it puts each student on their own page instead.
+// the doc). If that doesn't work, it puts each student on their own page instead, in a fresh
+// copy of the doc (the half-made tab version goes to the Drive trash).
 // The links to the new folder and docs go back to Code.gs and are shown to the teacher.
 // Later, DocReader.gs reads the finished comments back out of these same docs.
 //
@@ -98,6 +99,12 @@ function createClassDoc_(course, gradingPeriod, folder) {
     buildDocWithTabs_(docId, doc, course.students);
   } catch (tabError) {
     Logger.log('Tab creation not supported, falling back to pages: ' + tabError.message);
+    // The tab attempt may have stopped halfway, leaving some tabs already made. So instead of
+    // adding pages to that half-built doc, move it to the Drive trash (the teacher could still
+    // restore it from there) and start over with a brand-new, empty doc of the same name.
+    file.setTrashed(true);
+    docId = DocumentApp.create(docTitle).getId();
+    DriveApp.getFileById(docId).moveTo(folder);
     buildDocWithPages_(docId, course, gradingPeriod);
   }
 
@@ -133,8 +140,10 @@ function buildDocWithTabs_(docId, doc, students) {
   var tabRequests = [];
 
   // First change: rename the doc's existing tab to the first student's name.
+  // "updateDocumentTabProperties" and "addDocumentTab" (below) are the exact names Google's
+  // Docs API documentation uses for renaming a tab and adding a new tab.
   tabRequests.push({
-    updateTabProperties: {
+    updateDocumentTabProperties: {
       tabProperties: { tabId: defaultTabId, title: students[0].name },
       fields: 'title'
     }
@@ -143,12 +152,10 @@ function buildDocWithTabs_(docId, doc, students) {
   // For every other student, add a new tab named after them, placed in A-to-Z order.
   for (var i = 1; i < students.length; i++) {
     tabRequests.push({
-      createTab: {
-        tab: {
-          tabProperties: {
-            title: students[i].name,
-            index: i
-          }
+      addDocumentTab: {
+        tabProperties: {
+          title: students[i].name,
+          index: i
         }
       }
     });
@@ -159,7 +166,9 @@ function buildDocWithTabs_(docId, doc, students) {
 
   // Step 2: Re-read doc to get all tab IDs (new tabs have server-assigned IDs)
   // Google picks the ID for each new tab, so ask for a fresh copy of the doc to learn them.
-  var updatedDoc = Docs.Documents.get(docId);
+  // "includeTabsContent: true" is needed here: without it, Google leaves out the list of tabs
+  // and only sends back the first tab's contents.
+  var updatedDoc = Docs.Documents.get(docId, { includeTabsContent: true });
 
   // Step 3: Insert content into each tab
   // Go through each tab, one at a time. The tab's title is the student's name.
@@ -236,7 +245,7 @@ function buildDocWithTabs_(docId, doc, students) {
 // ─────────────────────────────────────────────
 
 // Backup plan: if tabs didn't work, put every student on their own page of one long doc.
-// It is given the doc's ID, the class (its name and students), and the grading period.
+// It is given the ID of a brand-new, empty doc (see createClassDoc_ above), the class (its name and students), and the grading period.
 // It gives nothing back; it changes the doc directly.
 // This uses Google's simpler, built-in way of editing docs ("DocumentApp").
 /**

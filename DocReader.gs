@@ -21,7 +21,8 @@
 // It is given the doc's link. It gives back the class name, the grading period, and a list of
 // students, each with their name and comment.
 // Docs made with tabs and docs made with pages are laid out differently, so it tries the tab
-// way first and switches to the page way if that fails.
+// way first and switches to the page way if that fails (the tab way deliberately fails when it
+// sees a page-layout doc; see readFromTabs_ below).
 /**
  * Reads all comments from a single Google Doc.
  * Auto-detects whether the doc uses tabs or pages.
@@ -88,9 +89,22 @@ function readCommentsFromFolder(folderUrl) {
 function readFromTabs_(docId) {
   // Get the whole doc from Google. Its title, like "Hum 2 — Fall Midterm", is split into the
   // class name and grading period (see parseSectionHeading_ below).
-  var doc = Docs.Documents.get(docId);
+  // "includeTabsContent: true" is needed here: without it, Google leaves out the list of tabs
+  // and only sends back the first tab's contents.
+  var doc = Docs.Documents.get(docId, { includeTabsContent: true });
   var docTitle = doc.title;
   var parsed = parseSectionHeading_(docTitle);
+
+  // Every doc has at least one tab, including docs made with the backup page layout, which
+  // keep all the students in one tab and mark each student's name as a "Heading 2". If that's
+  // what this doc looks like, stop here with an error, so readCommentsFromDoc (above) reads it
+  // the page way instead.
+  if (!doc.tabs || doc.tabs.length === 0) {
+    throw new Error('No tabs found in this doc.');
+  }
+  if (doc.tabs.length === 1 && tabHasHeading2_(doc.tabs[0])) {
+    throw new Error('This doc uses the page layout, not tabs.');
+  }
 
   // Start an empty list, then go through each tab one at a time. The tab's title is the
   // student's name.
@@ -123,6 +137,23 @@ function readFromTabs_(docId) {
     gradingPeriod: parsed.gradingPeriod,
     students: students
   };
+}
+
+// Check whether a tab contains any "Heading 2" line. Only the backup page layout uses that
+// style (for each student's name); the tab layout never does. It is given one tab, as Google
+// describes it, and gives back true or false.
+function tabHasHeading2_(tab) {
+  var body = tab.documentTab && tab.documentTab.body;
+  if (!body || !body.content) return false;
+  // Go through each paragraph in the tab and look at its style name.
+  for (var i = 0; i < body.content.length; i++) {
+    var paragraph = body.content[i].paragraph;
+    if (paragraph && paragraph.paragraphStyle &&
+        paragraph.paragraphStyle.namedStyleType === 'HEADING_2') {
+      return true;
+    }
+  }
+  return false;
 }
 
 // Google describes a doc's contents as nested pieces: paragraphs, and inside each paragraph,

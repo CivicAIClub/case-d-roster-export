@@ -150,7 +150,18 @@ function generateTemplate(selectedCourseIds, gradingPeriod) {
   var props = PropertiesService.getUserProperties();
   var token = props.getProperty('CANVAS_TOKEN');
   var baseUrl = props.getProperty('CANVAS_BASE_URL');
-  var courses = JSON.parse(props.getProperty('TEMP_COURSES'));
+  var storedCourses = props.getProperty('TEMP_COURSES');
+
+  // If the saved class list is missing (for example, this pop-up was left open from long ago),
+  // stop with a message that tells the teacher exactly what to do, instead of a confusing error.
+  if (!storedCourses) {
+    throw new Error(
+      'The class list for this window is no longer available. Please close this window and ' +
+      'choose Canvas Tools → Generate Comments Template again.'
+    );
+  }
+  // Turn the saved text back into a list of classes.
+  var courses = JSON.parse(storedCourses);
 
   // Filter to only selected courses
   // Keep only the classes whose ID number is on the teacher's ticked list. The pop-up sends the
@@ -181,9 +192,9 @@ function generateTemplate(selectedCourseIds, gradingPeriod) {
   // its link later.
   props.setProperty('LAST_COMMENTS_FOLDER', result.folderUrl);
 
-  // Clean up temp data
-  // The saved class list was only needed by the pop-up, so remove it now.
-  props.deleteProperty('TEMP_COURSES');
+  // Keep the saved class list (don't delete it) so the teacher can tick more classes in the same
+  // pop-up and click "Generate Templates" again. It isn't secret, and it gets replaced with a
+  // fresh list the next time the teacher opens this pop-up from the menu.
 
   // Hand the results back to the pop-up so it can show links to the new docs.
   return result;
