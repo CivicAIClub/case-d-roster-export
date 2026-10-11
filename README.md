@@ -1,5 +1,9 @@
 # Case D: Roster Export Automation
 
+## What this is
+
+Mr. Ring, a teacher at Pomfret, wanted a faster way to get ready for report comments. Every midterm and final, teachers copy class rosters out of Canvas by hand, clean them up in Google Sheets, move the names into a Google Doc to write comments, and then copy the comments into Sundial. This tool, a Google Apps Script inside a Google Sheet, pulls each roster from Canvas and makes one Google Doc per class with a tab for each student, ready for comments. Status: Phase 1 built (Canvas to Google Docs generation complete). Phase 2 blocked: the Sundial push is waiting on school IT to enable the SKY API.
+
 ## Client
 Mr. Ring (teacher, Pomfret School)
 
@@ -69,13 +73,13 @@ Drive Folder: "Comments — Fall Midterm"
 4. Survey other departments (science, math) to see if format differs
 5. Deploy as a shared template for all ~90 teachers
 
-## Team
-| Role | Name |
-|------|------|
-| Developer | James Lake |
-| Developer | Magnus Songhurst |
-| Club lead | Cayden Auyang |
-| Alumni advisor | Jay Youm (alumni advisor) |
+## Contributors
+
+- **Keke Li:** developer; wrote most of the code
+- **Cayden Auyang:** club lead; also contributed code
+- **James Lake:** developer
+- **Magnus Songhurst:** developer
+- **Jay Youm:** alumni advisor
 
 ## Working on this repo
 
