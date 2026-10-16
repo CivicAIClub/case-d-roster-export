@@ -96,6 +96,8 @@ These do not bend. The helper's tests enforce the first four.
 - **Cayden Auyang:** club lead; also contributed code
 - **James Lake:** developer
 - **Magnus Songhurst:** developer
+- **Richard Luo:** developer
+- **Sasha Khan:** developer
 - **Jay Youm:** alumni advisor
 
 ## Working on this repo
