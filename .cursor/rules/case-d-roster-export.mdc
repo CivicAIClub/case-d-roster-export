@@ -1,29 +1,43 @@
 ---
-description: Project context for Case D Roster Export — client, architecture, Apps Script constraints, status, and next steps
+description: Project context for Case D Roster Export (client, architecture, Apps Script and Sundial Helper rules, status, next steps)
 alwaysApply: true
 ---
 
-# Case D — Roster Export Automation
+# Case D: Roster Export Automation
 
 ## Client and problem
-- **Client:** Mr. Ring (teacher, Pomfret School); eventually all ~90 teachers.
-- **Problem:** Canvas has no clean one-click roster export. Every midterm and finals, teachers copy rosters out of Canvas, paste-special into Sheets to strip links, move names into a Google Doc to write comments, then copy comments into Sundial (Blackbaud MySchoolApp), export a PDF, and email it.
-- **Goal:** (1) pull the roster from Canvas automatically, (2) generate a clean Google Doc per class for writing comments, (3) Phase 2: push finished comments back into Sundial via the Blackbaud SKY API.
+- **Client:** Mr. Ring (teacher, Pomfret School); eventually all ~90 teachers. Mr. Lake (faculty advisor) built the grades tool teachers use alongside this project.
+- **Problem:** every midterm and term end, teachers copy rosters out of Canvas, move the names into a Google Doc to write comments, then pick every letter grade and paste every comment into Sundial (Blackbaud MySchoolApp), one student at a time, then export a PDF for their department head.
+- **Goal:** (1) pull rosters from Canvas automatically, (2) generate a Google Doc per class for writing comments, (3) get grades and comments into Sundial with the Sundial Helper, which fills fields for the teacher to check and save.
 
 ## Team
-- Developers: James Lake, Magnus Songhurst. Club lead: Cayden Auyang. Alumni advisor: Jay Youm (alumni advisor) — advises the team; not an active developer and not in CODEOWNERS.
+- Developers: Magnus Songhurst, James Lake, Richard Luo, Sasha Khan. Club lead: Cayden Auyang. Keke Li built the first version. Jay Youm is alumni advisor: he advises the team, is not an active developer, and is not in CODEOWNERS.
 
-## Stack and architecture (decided — do not reopen)
-- **Google Apps Script bound to a Google Sheet.** No server, no Python, no Chrome extension. Files are copied into the Apps Script editor; this repo is the source of truth.
-- `Code.gs` menu ("Canvas Tools") and orchestration · `CanvasAPI.gs` Canvas REST wrapper (courses + rosters, paginated, personal bearer token per teacher) · `DocBuilder.gs` creates a Drive folder, one Doc per class, one tab per student (falls back to page breaks if Docs tabs fail) · `DocReader.gs` reads completed Docs back · `SundialAPI.gs` Blackbaud SKY API placeholder (Phase 2, stubbed with TODOs) · dialogs: `TokenDialog.html`, `CourseSelector.html`, `SundialSetup.html`, `ExportDialog.html` · `appsscript.json` manifest and OAuth scopes.
-- Secrets live in `PropertiesService.getUserProperties()` (`SUNDIAL_SUBSCRIPTION_KEY`, `SUNDIAL_CLIENT_ID`, Canvas token) and are set through the dialogs. Never hardcode them.
+## Stack and architecture (decided; do not reopen)
+- **Comment Docs: Google Apps Script bound to a Google Sheet.** No server, no Python. Files are copied into the Apps Script editor; this repo is the source of truth. `Code.gs` menu ("Canvas Tools") and orchestration · `CanvasAPI.gs` Canvas REST wrapper (courses + rosters, paginated, personal bearer token per teacher) · `DocBuilder.gs` creates a Drive folder, one Doc per class, one tab per student (falls back to page breaks if Docs tabs fail) · `DocReader.gs` reads finished comments back out of those Docs · dialogs `TokenDialog.html`, `CourseSelector.html` · `appsscript.json` manifest and OAuth scopes.
+- **Sundial Helper: a Chrome extension in `sundial-helper/`.** Manifest V3, plain JavaScript, no build step, no libraries, no npm dependencies. This is the one approved exception to "Apps Script only" (Oct 2026), because Sundial has no API anyone at Pomfret can use. It works only on the page the teacher has open. Everything about how a page is laid out lives in `sundial-helper/src/page-adapter.js`.
+- **Retired:** the Blackbaud SKY API placeholder (`SundialAPI.gs`, `SundialSetup.html`, `ExportDialog.html`, the "Sundial Export" menu). Nobody at Pomfret has SKY API access, including the tech office. Do not extend it or build anything new on the SKY API; it is being removed.
+- **Grades** come from Mr. Lake's grades tool (outcome weights, decaying average). Do not calculate grades here, and do not use Canvas's own current score as the Sundial grade.
+- The Canvas token lives in `PropertiesService.getUserProperties()` and is set through the dialog. Never hardcode it.
+
+## Sundial Helper rules (non-negotiable)
+1. Never click anything on the page: no `.click()`, no mouse, pointer or keyboard events, no `submit()` or `requestSubmit()`. The teacher makes every click, including every Save.
+2. Only set the values of fields already on screen, then fire `input` and `change` so the page notices.
+3. No network requests (`fetch`, `XMLHttpRequest`, `WebSocket`, `sendBeacon`) and no background script.
+4. No storage (`chrome.storage`, `localStorage`, `sessionStorage`, IndexedDB, cookies). Pasted rows live in memory only. Never write rows or student names to the console.
+5. The manifest asks for no permissions and matches only `http://localhost/*` and `http://127.0.0.1/*` until the tech office approves Sundial's address. That change gets its own pull request.
+6. Never guess. Fill a student only when their name matches exactly one pasted row, and a grade only when it is one of the page's own options. Never overwrite a field that already has a value unless the teacher turns that on.
+7. No AI or model calls inside the helper, and no AI browser tools. It is plain code that does the same thing every time.
+8. Made-up students only. Never put a real student's name, grade or comment in code, tests, sample data, screenshots, commit messages or pull requests. Never save or copy a real Sundial page.
+
+`sundial-helper/test/safety.test.js` enforces rules 1 to 5. Never weaken that test to make something pass; if a change needs it weakened, stop and say so.
 
 ## Constraints and gotchas
 - Docs "tabs" API support is new; keep the page-break fallback in `DocBuilder.gs` working.
-- Canvas uses `sortable_name` ("Last, First"); Sundial's format is TBD. Use `normalizeName_()` for matching.
-- Phase 2 is **blocked** until school IT registers the app and grants SKY API OAuth access; no public docs confirm a write endpoint for progress-report comments. Keep `SundialAPI.gs` stubs clearly marked `TODO` rather than inventing endpoints.
+- Canvas uses `sortable_name` ("Last, First"); Sundial's name format is not confirmed yet.
+- The team has no access to Sundial. Build and test against the practice page in `sundial-helper/practice/`; the real page's layout comes from a teacher, without student data.
 - `appsscript.json` must stay valid JSON; add OAuth scopes there when new Google services are used.
 
 ## Status and next steps
-- 🟢 Phase 1 built: Canvas → Google Docs generation. 🟡 Phase 2 blocked on SKY API access.
-- Next: test Phase 1 with Mr. Ring's real Canvas account; follow up with IT on SKY API; confirm a comments write endpoint exists; survey other departments' comment formats; package as a shared template for all teachers.
+- 🟢 Phase 1 built (Canvas to Google Docs), not yet tested with a teacher's account. 🔴 SKY API plan retired. 🟡 Sundial Helper prototype on a practice page in progress.
+- Next: build the Sundial Helper prototype and remove the SKY API placeholder; meet Mr. Ring; get the real grading page's layout from Mr. Lake and approval from the tech office; test Phase 1 with Mr. Ring's Canvas account; later, a step that prepares the helper's rows from the comment Docs and Mr. Lake's grades.
